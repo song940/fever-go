@@ -32,6 +32,11 @@ func (f *Fever) Handle(input url.Values) (response map[string]any) {
 	response = make(map[string]any)
 	response["api_version"] = 3
 	response["last_refreshed_on_time"] = time.Now().Unix()
+	if !input.Has("api") {
+		response["auth"] = 0
+		response["error"] = "invalid request"
+		return
+	}
 	if !input.Has("api_key") {
 		response["auth"] = 0
 		response["error"] = "missing api_key"
@@ -75,7 +80,14 @@ func (f *Fever) Handle(input url.Values) (response map[string]any) {
 }
 
 func (f *Fever) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	response := f.Handle(r.URL.Query())
+	var input url.Values
+	if r.Method == "POST" {
+		r.ParseForm()
+		input = r.Form
+	} else {
+		input = r.URL.Query()
+	}
+	response := f.Handle(input)
 	w.Header().Set("Content-Type", "application/json")
 	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
