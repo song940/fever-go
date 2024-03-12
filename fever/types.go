@@ -71,7 +71,7 @@ type Favicon struct {
 
 type MarkRequest struct {
 	Type string
-	Id   int
+	Id   string
 	As   string
 }
 

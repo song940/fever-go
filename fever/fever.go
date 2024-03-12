@@ -5,18 +5,17 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 )
 
 type Handler interface {
-	FeverAuthenticate(apiKey string) bool
+	FeverAuthenticate(string) bool
 	FeverGroups() GroupsResponse
 	FeverFeeds() FeedsResponse
-	FeverItems(req *ItemRequest) ItemsResponse
+	FeverItems(*ItemRequest) ItemsResponse
 	FeverSavedItemIds() SavedResponse
 	FeverUnreadItemIds() UnreadResponse
-	FeverMark(req *MarkRequest) MarkResponse
+	FeverMark(*MarkRequest) MarkResponse
 }
 
 type Fever struct {
@@ -29,10 +28,10 @@ func New(handler Handler) *Fever {
 	}
 }
 
-func (f *Fever) Handle(input url.Values) (response map[string]interface{}) {
-	response = make(map[string]interface{})
-	response["last_refreshed_on_time"] = time.Now().Unix()
+func (f *Fever) Handle(input url.Values) (response map[string]any) {
+	response = make(map[string]any)
 	response["api_version"] = 3
+	response["last_refreshed_on_time"] = time.Now().Unix()
 	if !input.Has("api_key") {
 		response["auth"] = 0
 		response["error"] = "missing api_key"
@@ -46,26 +45,26 @@ func (f *Fever) Handle(input url.Values) (response map[string]interface{}) {
 		return
 	}
 	var payload any
-	payload = make(map[string]interface{})
+	payload = make(map[string]any)
 	switch {
 	case input.Has("groups"):
 		payload = f.Handler.FeverGroups()
 	case input.Has("feeds"):
 		payload = f.Handler.FeverFeeds()
-	case input.Has("unread_item_ids"):
-		payload = f.Handler.FeverUnreadItemIds()
 	case input.Has("items"):
 		req := &ItemRequest{}
 		req.SinceId = input.Get("since_id")
 		req.WithIDs = input.Get("with_ids")
 		payload = f.Handler.FeverItems(req)
+	case input.Has("unread_item_ids"):
+		payload = f.Handler.FeverUnreadItemIds()
 	case input.Has("saved_item_ids"):
 		payload = f.Handler.FeverSavedItemIds()
 	case input.Has("mark"):
 		req := &MarkRequest{}
-		req.Type = input.Get("mark")
+		req.Id = input.Get("id")
 		req.As = input.Get("as")
-		req.Id, _ = strconv.Atoi(input.Get("id"))
+		req.Type = input.Get("mark")
 		payload = f.Handler.FeverMark(req)
 	default:
 		log.Println("fever unknown request", input)
@@ -76,9 +75,7 @@ func (f *Fever) Handle(input url.Values) (response map[string]interface{}) {
 }
 
 func (f *Fever) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	// log.Println("fever request", r.Method, r.URL, r.Form)
-	response := f.Handle(r.Form)
+	response := f.Handle(r.URL.Query())
 	w.Header().Set("Content-Type", "application/json")
 	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
